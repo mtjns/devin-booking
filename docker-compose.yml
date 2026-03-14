@@ -1,0 +1,90 @@
+version: "3.9"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: devin-booking-app:latest
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      - db
+    volumes:
+      - .:/var/www/html
+      - storage-data:/var/www/html/storage
+    ports:
+      - "8080:80"
+
+  queue:
+    image: devin-booking-app:latest
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      - db
+    command: php artisan queue:work --tries=3 --sleep=3
+    volumes:
+      - .:/var/www/html
+      - storage-data:/var/www/html/storage
+
+  scheduler:
+    image: devin-booking-app:latest
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      - db
+    command: php artisan schedule:work
+    volumes:
+      - .:/var/www/html
+      - storage-data:/var/www/html/storage
+
+  db:
+    image: mysql:9.1
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE:-devin_booking}
+      MYSQL_USER: ${DB_USERNAME:-devin}
+      MYSQL_PASSWORD: ${DB_PASSWORD:-change_me}
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_change_me}
+    volumes:
+      - db-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+  backup:
+    image: mysql:9.1
+    env_file:
+      - .env
+    restart: unless-stopped
+    depends_on:
+      - db
+    volumes:
+      - ./backups:/backups
+    entrypoint: >
+      sh -c "while true; do
+        mysqldump -h db -u\"$$DB_USERNAME\" -p\"$$DB_PASSWORD\" \"$$DB_DATABASE\" |
+        gzip > /backups/backup-$(date +%F-%H%M%S).sql.gz;
+        find /backups -type f -mtime +14 -delete;
+        sleep 86400;
+      done"
+
+  caddy:
+    image: caddy:latest
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  db-data:
+  storage-data:
+

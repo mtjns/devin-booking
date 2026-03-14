@@ -1,0 +1,9 @@
+{
+    email {env.LETSENCRYPT_ACCOUNT_EMAIL}
+}
+
+{env.APP_PRIMARY_DOMAIN} {
+    encode gzip
+    reverse_proxy app:80
+}
+
