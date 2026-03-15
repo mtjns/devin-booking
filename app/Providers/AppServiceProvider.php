@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\SystemCrashNotice;
+use Illuminate\Support\Facades\URL;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -25,6 +26,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Force HTTPS for asset URLs when not in local development (e.g., production, staging)
+        if (!app()->isLocal()) {
+            URL::forceScheme('https');
+        }
+
         Booking::observe(BookingObserver::class);
 
         // Listens for any background job that exhausts its maximum retry attempts
@@ -36,6 +42,8 @@ class AppServiceProvider extends ServiceProvider
                 $jobName = $event->job->resolveName();
                 $jobDisplayName = $jobName;
                 $jobContext = "Worker was executing: " . $jobName;
+                $bookingDetails = null;
+                $additionalContext = [];
 
                 try {
                     $payload = $event->job->payload();
@@ -43,8 +51,31 @@ class AppServiceProvider extends ServiceProvider
                         $jobDisplayName = $payload['displayName'];
                         $jobContext = "Worker was executing: " . $jobDisplayName;
                     }
+
+                    // Try to extract booking_id from job data
+                    $jobData = $payload['data']['command'] ?? null;
+                    if (!empty($jobData)) {
+                        // Try to find booking_id in the data
+                        $decoded = unserialize($jobData);
+                        if (is_object($decoded) && isset($decoded->booking_id)) {
+                            $booking = Booking::find($decoded->booking_id);
+                            if ($booking) {
+                                $bookingDetails = [
+                                    'ID' => $booking->id,
+                                    'Customer' => $booking->customer_name,
+                                    'Email' => $booking->customer_email,
+                                    'Phone' => $booking->customer_phone,
+                                    'Status' => strtoupper($booking->status),
+                                    'Booking Date' => $booking->booking_date?->format('Y-m-d H:i') ?? 'N/A',
+                                    'Total Price' => $booking->total_price . ' Kč',
+                                    'Paid Amount' => $booking->paid_amount . ' Kč',
+                                ];
+                                $additionalContext['Variable Symbol'] = $booking->variable_symbol;
+                            }
+                        }
+                    }
                 } catch (\Exception $e) {
-                    // Ignore payload parsing errors
+                    // Ignore payload parsing errors - we'll still send the crash notice
                 }
 
                 $exceptionMsg = strtolower($event->exception->getMessage());
@@ -70,7 +101,9 @@ class AppServiceProvider extends ServiceProvider
                     $event->exception,
                     'Background Queue Worker',
                     $jobContext,
-                    $actionRequired
+                    $actionRequired,
+                    $bookingDetails,
+                    !empty($additionalContext) ? $additionalContext : null
                 ));
             }
 

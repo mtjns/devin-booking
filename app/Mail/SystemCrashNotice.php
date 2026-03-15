@@ -20,10 +20,18 @@ class SystemCrashNotice extends Mailable
     public string $source;
     public ?string $jobContext;
     public ?string $actionRequired;
+    public ?array $bookingDetails;
+    public ?array $additionalContext;
 
     // Accepts the exception interface and a string identifying where the crash occurred
-    public function __construct(Throwable $exception, string $source = 'Application', ?string $jobContext = null, ?string $actionRequired = null)
-    {
+    public function __construct(
+        Throwable $exception,
+        string $source = 'Application',
+        ?string $jobContext = null,
+        ?string $actionRequired = null,
+        ?array $bookingDetails = null,
+        ?array $additionalContext = null
+    ) {
         $this->errorMessage = $exception->getMessage() ?: 'No exception message provided.';
         $this->errorClass = get_class($exception);
         $this->errorFile = $exception->getFile();
@@ -31,6 +39,8 @@ class SystemCrashNotice extends Mailable
         $this->source = $source;
         $this->jobContext = $jobContext;
         $this->actionRequired = $actionRequired ?? 'Zkontrolujte logy aplikace pro více informací. (Prohlédněte system log nebo Laravel log)';
+        $this->bookingDetails = $bookingDetails;
+        $this->additionalContext = $additionalContext;
     }
 
     public function envelope(): Envelope

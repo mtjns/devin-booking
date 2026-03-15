@@ -45,6 +45,30 @@
             </tr>
         @endif
     </table>
+
+    @if(!empty($bookingDetails))
+        <h3 style="color: #2c3e50; margin-top: 25px;">Booking Information</h3>
+        <table style="width: 100%; border-collapse: collapse; background-color: #fff; padding: 15px;">
+            @foreach($bookingDetails as $key => $value)
+                <tr>
+                    <td style="font-weight: bold; padding: 8px; border-bottom: 1px solid #ddd; width: 150px;">{{ $key }}:</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #ddd;">{{ $value }}</td>
+                </tr>
+            @endforeach
+        </table>
+    @endif
+
+    @if(!empty($additionalContext))
+        <h3 style="color: #2c3e50; margin-top: 25px;">Additional Context</h3>
+        <table style="width: 100%; border-collapse: collapse; background-color: #fff; padding: 15px;">
+            @foreach($additionalContext as $key => $value)
+                <tr>
+                    <td style="font-weight: bold; padding: 8px; border-bottom: 1px solid #ddd; width: 150px;">{{ $key }}:</td>
+                    <td style="padding: 8px; border-bottom: 1px solid #ddd;">{{ $value }}</td>
+                </tr>
+            @endforeach
+        </table>
+    @endif
 </body>
 
 </html>

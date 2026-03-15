@@ -188,7 +188,7 @@ class BookingResource extends Resource
                             ->columnSpanFull(),
 
                         \Filament\Forms\Components\Textarea::make('customer_notes')
-                            ->label('Poznámky zákazníka')
+                            ->label('Poznámky hosta')
                             ->columnSpanFull(),
                     ]),
 
@@ -201,9 +201,9 @@ class BookingResource extends Resource
                                 if (!empty($get('end_date')) && \Carbon\Carbon::parse($get('end_date'))->endOfDay()->isPast()) {
                                     return new \Illuminate\Support\HtmlString('<span style="color: #dc2626;">U historických rezervací nelze odesílat notifikace.</span>');
                                 } else if (empty($get('customer_email'))) {
-                                    return new \Illuminate\Support\HtmlString('<span style="color: #dc2626;">Zadejte e-mail zákazníka pro možnost odesílat notifikace.</span>');
+                                    return new \Illuminate\Support\HtmlString('<span style="color: #dc2626;">Zadejte e-mail hosta pro možnost odesílat notifikace.</span>');
                                 }
-                                return 'Okamžitě odešle e-mail zákazníkovi při vytvoření nebo úpravě této rezervace.';
+                                return 'Okamžitě odešle e-mail hostovi při vytvoření nebo úpravě této rezervace.';
                             })
                             ->default(false)
                             ->disabled(fn(Forms\Get $get): bool => empty($get('customer_email')) || (!empty($get('end_date')) && \Carbon\Carbon::parse($get('end_date'))->endOfDay()->isPast()))
@@ -215,7 +215,7 @@ class BookingResource extends Resource
                                 if (!empty($get('end_date')) && \Carbon\Carbon::parse($get('end_date'))->endOfDay()->isPast()) {
                                     return new \Illuminate\Support\HtmlString('<span style="color: #dc2626;">U historických rezervací nelze vymáhat platby.</span>');
                                 } else if (empty($get('customer_email'))) {
-                                    return new \Illuminate\Support\HtmlString('<span style="color: #dc2626;">Zadejte e-mail zákazníka pro možnost vymáhat termíny plateb.</span>');
+                                    return new \Illuminate\Support\HtmlString('<span style="color: #dc2626;">Zadejte e-mail hosta pro možnost vymáhat termíny plateb.</span>');
                                 }
                                 return 'Automaticky odesílá upozornění na platbu a zruší rezervaci při nezaplacení.';
                             })
@@ -248,7 +248,7 @@ class BookingResource extends Resource
 
                 // Displays the customer's name and makes the column searchable via the top right search bar
                 \Filament\Tables\Columns\TextColumn::make('customer_name')
-                    ->label('Zákazník')
+                    ->label('Host')
                     ->searchable()
                     ->sortable(),
 
@@ -283,7 +283,7 @@ class BookingResource extends Resource
 
                 // Displays a truncated preview of the customer notes, hiding the column by default
                 \Filament\Tables\Columns\TextColumn::make('customer_notes')
-                    ->label('Poznámky zákazníka')
+                    ->label('Poznámky hosta')
                     ->limit(30)
                     ->tooltip(fn($state) => $state)
                     ->toggleable(isToggledHiddenByDefault: false),
