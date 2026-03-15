@@ -112,6 +112,7 @@ Set at least:
 From the project directory on the server:
 
 ```bash
+rm compose.yml  # Remove the compose file if it exists, it is for developement only and not used in production
 docker compose -f docker-compose.yml build
 docker compose -f docker-compose.yml up -d
 ```
