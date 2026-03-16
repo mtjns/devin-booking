@@ -134,14 +134,41 @@ The app will be available on port `8080` by default (see `docker-compose.yml`).
 After the containers are up:
 
 ```bash
-docker compose exec app php artisan migrate --force
+docker compose exec app php artisan migrate --force # You may need to run this twice if the app starts before the database is fully ready. Just run it again until it succeeds.
 ```
 
 Optionally seed:
 
 ```bash
-docker compose exec app php artisan db:seed --force
+docker compose exec app php artisan db:seed --force # Only if you want to add test data. Not recommended in production.
 ```
+
+### 4.1 Create the first super admin user
+
+Once migrations are complete, create your first admin account using Laravel Tinker:
+
+```bash
+docker compose -f docker-compose.yml exec app php artisan tinker
+```
+
+In the Tinker shell, paste this and replace the values with your actual credentials:
+
+```php
+App\Models\User::create([
+    'name' => 'Admin',
+    'email' => 'your-email@example.com',
+    'password' => bcrypt('your-secure-password'),
+    'is_super_admin' => true,
+    'can_manage_users' => true,
+    'can_view_bookings' => true,
+    'can_edit_bookings' => true,
+    'can_manage_financials' => true,
+]);
+```
+
+Press Enter and then type `exit` to close Tinker.
+
+You can now log in to the admin panel with the email and password you just created.
 
 ### 5. Accessing the app
 

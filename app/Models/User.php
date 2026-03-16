@@ -12,13 +12,12 @@ class User extends Authenticatable
     /** @use HasFactory<\Database\Factories\UserFactory> */
     use HasFactory, Notifiable;
 
-    // FIXME: Forces every newly created user row in the database to have these default boolean values - delete this entire block for default "false" values instead
     protected $attributes = [
-        'is_super_admin' => true,
-        'can_manage_users' => true,
-        'can_view_bookings' => true,
-        'can_edit_bookings' => true,
-        'can_manage_financials' => true,
+        'is_super_admin' => false,
+        'can_manage_users' => false,
+        'can_view_bookings' => false,
+        'can_edit_bookings' => false,
+        'can_manage_financials' => false,
     ];
 
 

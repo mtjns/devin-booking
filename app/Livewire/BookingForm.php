@@ -26,13 +26,16 @@ class BookingForm extends Component
 
     public bool $consent = false;
 
+    /**
+     * Defines strict rules for incoming request data.
+     * The validate() method automatically evaluates these and halts execution 
+     * on failure, preventing invalid state or malicious payloads.
+     */
     protected function rules(): array
     {
         return [
-            // Restricts the start date to be no earlier than today and no later than exactly one year from today
-            'start_date' => ['required', 'date', 'after_or_equal:today', 'before_or_equal:+1 year'],
-            // Restricts the end date to be strictly after the start date and no later than one year and one month from today, accommodating stays that begin near the one-year limit
-            'end_date' => ['required', 'date', 'after:start_date', 'before_or_equal:+1 year +1 month'],
+            'start_date' => ['required', 'date', 'after_or_equal:today', 'before_or_equal:+1 year +2 days'],
+            'end_date' => ['required', 'date', 'after:start_date', 'before_or_equal:+1 year +1 month +2 days'],
             'graduate_count' => ['required', 'integer', 'min:0'],
             'student_count' => ['required', 'integer', 'min:0'],
             'child_count' => ['required', 'integer', 'min:0'],
@@ -46,8 +49,46 @@ class BookingForm extends Component
         ];
     }
 
+    /**
+     * Mapuje názvy proměnných na uživatelsky přívětivé české názvy pro chybové hlášky.
+     * Namísto "customer email je povinný" se zobrazí "E-mail je povinný".
+     */
+    protected function validationAttributes(): array
+    {
+        return [
+            'start_date' => 'datum příjezdu',
+            'end_date' => 'datum odjezdu',
+            'graduate_count' => 'počet absolventů',
+            'student_count' => 'počet studentů',
+            'child_count' => 'počet dětí',
+            'external_count' => 'počet externistů',
+            'dog_count' => 'počet psů',
+            'customer_name' => 'jméno',
+            'customer_email' => 'e-mail',
+            'customer_phone' => 'telefon',
+            'customer_notes' => 'poznámka',
+            'consent' => 'souhlas s podmínkami',
+        ];
+    }
+
+    /**
+     * Vlastní texty chybových hlášek pro konkrétní pravidla.
+     */
+    protected function messages(): array
+    {
+        return [
+            'customer_email.email' => 'Zadejte prosím e-mail v platném formátu.',
+            'customer_name.required' => 'Vyplnění jména je povinné.',
+            'customer_email.required' => 'Vyplnění e-mailu je povinné.',
+            'consent.accepted' => 'Pro odeslání musíte souhlasit s podmínkami.',
+            'start_date.after_or_equal' => 'Datum příjezdu nesmí být v minulosti.',
+        ];
+    }
+
     public function submitReservation(GeneralSettings $settings)
     {
+        // Automatically checks properties against rules()
+        // If it fails, a ValidationException is thrown and execution stops here
         $this->validate();
 
         $start = Carbon::parse($this->start_date);
@@ -56,13 +97,14 @@ class BookingForm extends Component
 
         $totalRequestedGuests = $this->graduate_count + $this->student_count + $this->child_count + $this->external_count;
 
+        // Prevent zero-guest bookings that pass the min:0 individual field validation
         if ($totalRequestedGuests === 0) {
             $this->addError('graduate_count', 'Musíte uvést alespoň jednoho hosta.');
             return;
         }
 
-        // Fetches bookings that intersect with the requested dates.
-        // Interval algebra (StartA < EndB AND EndA > StartB) to detect overlaps.
+        // Queries the database securely using Eloquent, preventing SQL injection
+        // Checks for overlapping reservations based on start and end dates
         $overlappingBookings = Booking::whereIn('status', ['pending', 'deposit_paid'])
             ->where(function ($query) use ($start, $end) {
                 $query->where('start_date', '<', $end)
@@ -71,12 +113,14 @@ class BookingForm extends Component
 
         $period = CarbonPeriod::create($start, $end->copy()->subDay());
 
+        // Verify capacity on a night-by-night basis
         foreach ($period as $date) {
             $reservedForNight = 0;
 
             foreach ($overlappingBookings as $booking) {
                 if ($date->between($booking->start_date, $booking->end_date->copy()->subDay())) {
 
+                    // If a colliding booking blocks the entire cabin, abort immediately
                     if ($booking->reserve_whole) {
                         $this->addError('start_date', 'Zvolený termín koliduje s rezervací celé chaty.');
                         return;
@@ -86,30 +130,36 @@ class BookingForm extends Component
                 }
             }
 
+            // Ensure the cumulative guest count does not exceed the cabin's hard limit
             if (($reservedForNight + $totalRequestedGuests) > $settings->bed_capacity) {
                 $this->addError('start_date', 'Pro zvolený termín již nezbývá dostatek volných lůžek.');
                 return;
             }
         }
 
-        // Calculate nightly guest rate: each guest type × their price
-        $nightlyGuestRate = ($this->graduate_count * $settings->graduate_price) +
-            ($this->student_count * $settings->student_price) +
-            ($this->child_count * $settings->child_price) +
-            ($this->external_count * $settings->external_price) +
-            ($this->dog_count * $settings->dog_price);
-
-        // Formula: (nightly_guest_rate + wood_fee) × number_of_nights
-        // This is pre-calculated here for the public form; Booking model has a fallback for admin panel entries
-        $totalPrice = ($nightlyGuestRate + $settings->wood_price) * $nights;
-
+        // Construct a new Eloquent model instance using sanitized validated data
+        // Price is calculated in the model
         $booking = new Booking();
-        $booking->fill($this->all());
-        $booking->total_price = $totalPrice;
+        $booking->fill([
+            'start_date' => $start->toDateString(),
+            'end_date' => $end->toDateString(),
+            'graduate_count' => $this->graduate_count,
+            'student_count' => $this->student_count,
+            'child_count' => $this->child_count,
+            'external_count' => $this->external_count,
+            'dog_count' => $this->dog_count,
+            'customer_name' => $this->customer_name,
+            'customer_email' => $this->customer_email,
+            'customer_phone' => $this->customer_phone,
+            'customer_notes' => $this->customer_notes,
+        ]);
+
+        // Commits the transaction securely
         $booking->save();
 
-        session()->flash('success', 'Rezervace byla úspěšně odeslána. Podrobnosti naleznete v e-mailu.');
-        return redirect()->route('home');
+        session()->flash('success', 'Rezervace byla úspěšně odeslána.');
+
+        return redirect()->to('/');
     }
 
     public function render()

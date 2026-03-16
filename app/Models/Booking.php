@@ -77,29 +77,23 @@ class Booking extends Model
 
             $depositPercentage = (int) ($settings->deposit_percentage ?? 20);
 
-            // Auto-calculate total price if not already set (fallback for admin panel / API usage)
-            // Public form (Livewire) pre-calculates this before save, so this only triggers in admin panel.
-            // Why we check that start/end dates are not empty:
-            //   - Price formula requires knowing the duration: price = (nightly_rate) × nights
-            //   - Without both dates, we cannot compute nights, so diffInDays() would fail on null values
-            //   - This ensures that the price is only auto-calculated when we have the necessary data, preventing errors and allowing admins to set custom prices if needed.
-            if (empty($booking->total_price) && !empty($booking->start_date) && !empty($booking->end_date)) {
-                $nights = $booking->start_date->diffInDays($booking->end_date);
+            // Auto-calculate total price if not already set
+            $nights = $booking->start_date->diffInDays($booking->end_date);
 
-                if ($nights > 0) {
-                    // Calculate nightly guest rate based on guest counts
-                    $nightlyGuestRate = (
-                        ($booking->graduate_count ?? 0) * ($settings->graduate_price ?? 0) +
-                        ($booking->student_count ?? 0) * ($settings->student_price ?? 0) +
-                        ($booking->child_count ?? 0) * ($settings->child_price ?? 0) +
-                        ($booking->external_count ?? 0) * ($settings->external_price ?? 0) +
-                        ($booking->dog_count ?? 0) * ($settings->dog_price ?? 0)
-                    );
+            if ($nights > 0) {
+                // Calculate nightly guest rate based on guest counts
+                $nightlyGuestRate = (
+                    ($booking->graduate_count ?? 0) * ($settings->graduate_price ?? 0) +
+                    ($booking->student_count ?? 0) * ($settings->student_price ?? 0) +
+                    ($booking->child_count ?? 0) * ($settings->child_price ?? 0) +
+                    ($booking->external_count ?? 0) * ($settings->external_price ?? 0) +
+                    ($booking->dog_count ?? 0) * ($settings->dog_price ?? 0)
+                );
 
-                    // Total price = (nightly rate + wood price) × nights
-                    $booking->total_price = (int) (($nightlyGuestRate + ($settings->wood_price ?? 0)) * $nights);
-                }
+                // Total price = (nightly rate + wood price) × nights
+                $booking->total_price = (int) (($nightlyGuestRate + ($settings->wood_price ?? 0)) * $nights);
             }
+
 
             // Calculates the deposit amount (0% deposit means free booking)
             if (empty($booking->deposit_amount)) {

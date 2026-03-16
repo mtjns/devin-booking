@@ -12,19 +12,59 @@ This is a Laravel-based reservation and management system designed for alumni ca
 
 ## Deployment Overview
 
-- **Local development**:
-  - Use Laravel Sail with `compose.yaml`:
-    - `./vendor/bin/sail up -d`
-  - This starts a dev stack with MySQL, Redis, Meilisearch, Mailpit, and a dev PHP app.
-- **Production**:
-  - Uses `docker-compose.yml` with:
-    - `app` (PHP-FPM + Nginx + built frontend)
-    - `queue` (queue worker)
-    - `scheduler` (Laravel scheduler)
-    - `db` (MySQL with persistent volume)
-    - `backup` (nightly compressed DB dumps into `backups/`)
-    - `caddy` (HTTPS reverse proxy with automatic Let's Encrypt certificates)
-  - Step-by-step instructions live in `DEPLOY.md` and should be treated as the main source of truth for new administrators.
+### Docker Compose Files
+
+The project uses two separate Docker setups:
+
+#### **Production** (`docker-compose.yml`)
+Optimized for production deployments with HTTPS, automated backups, and minimal overhead:
+- `app` — PHP application server
+- `queue` — Background task worker (processes emails, payments, warnings)
+- `scheduler` — Runs scheduled tasks (payment processing, booking status checks)
+- `db` — MySQL database with persistent volume
+- `backup` — Automated nightly database backups (kept for 14 days)
+- `meilisearch` — Full-text search engine (internal-only, no exposed port)
+- `caddy` — HTTPS reverse proxy with automatic Let's Encrypt certificates
+
+**To run:** `docker-compose -f docker-compose.yml up -d`
+
+**Configuration:** Uses `.env` file for environment variables.
+
+#### **Development** (`docker-compose.dev.yml`)
+Lightweight development environment for local testing:
+- `app` — PHP application server (port 80)
+- `queue` — Background task worker
+- `scheduler` — Task scheduler
+- `db` — MySQL database (port 3306)
+- `meilisearch` — Search engine (port 7700 exposed for debugging)
+- `mailpit` — Email testing dashboard (ports 1025 for SMTP, 8025 for web UI)
+- **No Caddy** — Direct HTTP access on port 80 for simplicity
+
+**To run:** `docker-compose -f docker-compose.dev.yml up -d`
+
+**Configuration:** Uses `.dev.env` file for environment variables.
+
+**Mailpit:** Access the email dashboard at `http://localhost:8025` to view all emails sent during testing.
+
+#### **Legacy Sail** (`compose.yaml`)
+Original Laravel Sail configuration with Redis, full debugging tools, and Selenium for browser testing. Still available but not recommended for new development. Run with: `./vendor/bin/sail up -d`
+
+### Key Services Explained
+
+**Meilisearch** — Full-text search engine for booking searches and filters. Required in production if search features are enabled in the UI. Automatically synced with the database via Laravel Scout.
+
+**Caddy** — Production-only reverse proxy that:
+- Handles HTTPS with automatic Let's Encrypt certificate generation
+- Routes requests to the app container
+- Requires a domain name in the `Caddyfile` configuration
+
+**Mailpit** — Development-only email interceptor that captures all emails sent by the app. Access the web UI at `http://localhost:8025` to review emails without sending them to real addresses.
+
+**Backup Service** — Production-only automated database backups. Runs every 24 hours and stores compressed dumps in the `backups/` folder. Old backups older than 14 days are automatically deleted.
+
+### Deployment Instructions
+
+Step-by-step production deployment instructions live in `DEPLOY.md` and should be treated as the main source of truth for new administrators.
 
 ## Core Architecture
 

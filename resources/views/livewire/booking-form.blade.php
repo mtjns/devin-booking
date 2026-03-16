@@ -1,144 +1,233 @@
-<div x-data="bookingManager()" x-init="init()" class="max-w-6xl mx-auto p-8 bg-white rounded-lg shadow-lg">
+<div x-data="bookingManager()" x-init="init()" class="w-full">
+    <form wire:submit="submitReservation" class="space-y-8">
+        
+        <!-- 1. Ceník -->
+        <section class="p-6 bg-white dark:bg-gray-800 border border-default-medium dark:border-gray-700 rounded-base shadow-xs transition-colors">
+            <h2 class="mb-5 text-lg font-medium text-heading dark:text-white">Orientační ceník</h2>
+            
+            <!-- Grid container for simple text rows -->
+            <ul class="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-8 text-sm text-body dark:text-gray-400">
+                <template x-for="(label, key) in guestLabelsSingular" :key="key">
+                    <!-- Standard pricing row -->
+                    <li class="flex justify-between items-center" x-show="cabinRules.prices && cabinRules.prices[key] !== undefined">
+                        <span x-text="label"></span>
+                        <span class="font-medium text-heading dark:text-gray-300" x-text="formatPrice(cabinRules.prices[key]) + ' / noc'"></span>
+                    </li>
+                </template>
+                
+                <!-- Wood fee displayed alongside standard pricing rows -->
+                <li class="flex justify-between items-center" x-show="cabinRules.prices && cabinRules.prices.wood">
+                    <span>Dřevo</span>
+                    <span class="font-medium text-heading dark:text-gray-300" x-text="formatPrice(cabinRules.prices.wood) + ' / noc'"></span>
+                </li>
+            </ul>
+        </section>
 
-    <form wire:submit="submitReservation" class="space-y-10">
+        <!-- 2. Payment Rules & Info -->
+         <section class="p-6 bg-white dark:bg-gray-800 border border-default-medium dark:border-gray-700 rounded-base shadow-xs transition-colors">
+            <h2 class="mb-5 text-lg font-medium text-heading dark:text-white">Informace</h2>
+            
+            <div class="space-y-4 text-sm text-body dark:text-gray-400">
+                <!-- Payment Information -->
+                <div class="flex items-start">
+                    <svg class="w-5 h-5 mr-3 mt-0.5 text-brand dark:text-blue-400 shrink-0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                    </svg>
+                    <span>Po odeslání rezervace Vám zašleme e-mail s potrvzením rezervace a přesnými platebními údaji.</span>
+                </div>
+                
+                <!-- Payment Deadline -->
+                <div class="flex items-start">
+                    <svg class="w-5 h-5 mr-3 mt-0.5 text-brand dark:text-blue-400 shrink-0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                    </svg>
+                    <span>Splatnost rezervace je <strong x-text="cabinRules.pending_window + ' dní'"></strong>. Prosíme o včasnou úhradu, v opačném případě bude rezervace automaticky stornována.</span>
+                </div>
 
-        <section>
-            <h2 class="text-2xl font-bold mb-6 text-gray-800 border-b pb-2">1. Termín pobytu</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6" wire:ignore.self>
-                <div wire:ignore>
-                    <label class="block text-sm font-semibold text-gray-600 mb-2 uppercase">Příjezd a Odjezd</label>
-                    <input x-ref="litepicker" type="text" readonly
-                        class="w-full p-4 border-2 border-gray-100 rounded-xl bg-gray-50 focus:border-blue-500 transition-all cursor-pointer text-lg"
-                        placeholder="Vyberte termín...">
+                <!-- Deposit Information -->
+                <div class="flex items-start">
+                    <svg class="w-5 h-5 mr-3 mt-0.5 text-brand dark:text-blue-400 shrink-0" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8H5a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2v-8a2 2 0 00-2-2zm-6 4v4m0 0a2 2 0 100-4 2 2 0 000 4z"/>
+                    </svg>
+                    <span>Pro závazné potvrzení termínu je nutné uhradit zálohu<span x-show="cabinRules.deposit_percentage"> ve výši <strong x-text="cabinRules.deposit_percentage + '%'"></strong> z celkové částky</span>. Zbytek částky se doplácí před nástupem.</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. Date Picker -->
+        <section class="p-6 bg-white dark:bg-gray-800 border border-default-medium dark:border-gray-700 rounded-base shadow-xs transition-colors">
+            <h2 class="mb-5 text-lg font-medium text-heading dark:text-white">Termín pobytu</h2>
+            
+            <div wire:ignore.self>
+                <div class="mb-5" wire:ignore>
+                    <label class="block mb-2.5 text-sm font-medium text-heading dark:text-white">Příjezd a Odjezd</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                            <svg class="w-4 h-4 text-body dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                                <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 10h16M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01M4 4h16a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1Z"/>
+                            </svg>
+                        </div>
+                        <input x-ref="litepicker" type="text" readonly
+                            class="block w-full ps-9 pe-3 py-2.5 bg-neutral-secondary-medium dark:bg-gray-700 border border-default-medium dark:border-gray-600 text-heading dark:text-white text-sm rounded-base focus:ring-brand focus:border-brand dark:focus:ring-blue-500 dark:focus:border-blue-500 shadow-xs placeholder:text-body dark:placeholder-gray-400 cursor-pointer transition-colors"
+                            placeholder="Vyberte termín...">
+                    </div>
                 </div>
             </div>
 
-            <div x-show="nights > 0" x-transition class="mt-4 p-4 rounded-lg bg-gray-50 border border-gray-200">
-                <span class="text-gray-700 font-medium">Dostupná kapacita pro tento termín: </span>
-                <span class="font-bold text-lg" :class="availableBeds > 0 ? 'text-green-600' : 'text-red-600'"
-                    x-text="availableBeds + ' lůžek'"></span>
+            <div x-show="nights > 0" x-transition class="mt-2.5 text-sm">
+                <span class="text-body dark:text-gray-400">Dostupná kapacita pro tento termín:</span>
+                <span class="font-medium" :class="availableBeds > 0 ? 'text-fg-success-strong dark:text-green-400' : 'text-fg-danger-strong dark:text-red-400'"
+                    x-text="luzkaText(availableBeds)"></span>
             </div>
 
-            @error('start_date') <span class="text-red-500 text-sm mt-2 block">{{ $message }}</span> @enderror
+            @error('start_date') 
+                <p class="mt-2.5 text-sm text-fg-danger-strong dark:text-red-400"><span class="font-medium"></span> {{ $message }}</p> 
+            @enderror
         </section>
 
-        <section>
-            <h2 class="text-2xl font-bold mb-6 text-gray-800 border-b pb-2">2. Hosté</h2>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- 3. Guests -->
+        <section class="p-6 bg-white dark:bg-gray-800 border border-default-medium dark:border-gray-700 rounded-base shadow-xs transition-colors">
+            <h2 class="mb-5 text-lg font-medium text-heading dark:text-white">Hosté</h2>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <template x-for="(label, key) in guestLabels" :key="key">
-                    <div class="p-4 border-2 border-gray-100 rounded-xl bg-gray-50 flex flex-col items-center">
-                        <span class="text-xs font-bold text-gray-400 uppercase mb-3" x-text="label"></span>
-                        <div class="flex items-center space-x-4">
+                    <div class="flex items-center justify-between p-3 bg-neutral-secondary-medium dark:bg-gray-700/50 border border-default-medium dark:border-gray-600 rounded-base transition-colors">
+                        <div>
+                            <span class="block text-sm font-medium text-heading dark:text-white" x-text="label"></span>
+                        </div>
+                        <div class="flex items-center">
                             <button type="button" @click="decrement(key)"
-                                class="w-10 h-10 rounded-full bg-white shadow-sm border flex items-center justify-center font-bold text-xl hover:bg-gray-100">-</button>
-                            <span class="text-2xl font-bold w-8 text-center" x-text="guests[key]"></span>
+                                class="inline-flex items-center justify-center h-8 w-8 text-heading dark:text-gray-300 bg-white dark:bg-gray-800 border border-default-medium dark:border-gray-600 hover:bg-neutral-secondary-medium dark:hover:bg-gray-700 font-medium rounded-base transition-all">
+                                <svg class="w-3 h-3" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 18 2">
+                                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M1 1h16"/>
+                                </svg>
+                            </button>
+                            <span class="mx-3 text-sm font-medium text-heading dark:text-white w-4 text-center" x-text="guests[key]"></span>
                             <button type="button" @click="increment(key)"
-                                class="w-10 h-10 rounded-full bg-white shadow-sm border flex items-center justify-center font-bold text-xl hover:bg-gray-100">+</button>
+                                class="inline-flex items-center justify-center h-8 w-8 text-heading dark:text-gray-300 bg-white dark:bg-gray-800 border border-default-medium dark:border-gray-600 hover:bg-neutral-secondary-medium dark:hover:bg-gray-700 font-medium rounded-base transition-all">
+                                <svg class="w-3 h-3" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 18 18">
+                                    <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 1v16M1 9h16"/>
+                                </svg>
+                            </button>
                         </div>
                     </div>
                 </template>
             </div>
 
-            <div x-show="isOverCapacity" x-transition
-                class="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center text-red-800">
-                <svg class="w-6 h-6 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z">
-                    </path>
-                </svg>
-                <span>Počet hostů (<span x-text="totalGuests"></span>) překračuje dostupnou kapacitu (<span
-                        x-text="availableBeds"></span>) pro zvolený termín. Prosím, upravte počet hostů nebo vyberte
-                    jiný termín.</span>
-            </div>
-        </section>
-
-        <section x-show="totalPrice > 0" x-transition class="bg-blue-50 p-6 rounded-2xl border border-blue-100">
-            <div class="flex justify-between items-center">
-                <div>
-                    <h3 class="text-blue-900 font-bold text-lg">Předběžná kalkulace</h3>
-                    <p class="text-blue-700 text-sm">Cena za <span x-text="nights"></span> nocí</p>
-                </div>
-                <div class="text-right">
-                    <span class="text-3xl font-black text-blue-900" x-text="formatPrice(totalPrice)"></span>
-                    <p class="text-blue-600 text-xs mt-1">Včetně paušálu za dřevo a energií</p>
+            <div x-show="isOverCapacity" x-transition class="mt-5">
+                <div class="p-3 bg-danger-soft dark:bg-red-900/30 border border-danger-subtle dark:border-red-800 rounded-base">
+                    <p class="text-sm text-fg-danger-strong dark:text-red-400">
+                        <span class="font-medium">Kapacita překročena!</span> K dispozici je pouze <span x-text="luzkaText(availableBeds)"></span>.
+                    </p>
                 </div>
             </div>
         </section>
 
-        <section>
-            <h2 class="text-2xl font-bold mb-6 text-gray-800 border-b pb-2">3. Kontaktní údaje</h2>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div class="md:col-span-2">
-                    <label class="block text-sm font-semibold text-gray-600 mb-1">Celé jméno</label>
-                    <input type="text" wire:model="customer_name"
-                        class="w-full p-3 border-2 border-gray-100 rounded-xl focus:border-blue-500 outline-none transition-all">
+        <!-- 4. Contact Details -->
+        <section class="p-6 bg-white dark:bg-gray-800 border border-default-medium dark:border-gray-700 rounded-base shadow-xs transition-colors">
+            <h2 class="mb-5 text-lg font-medium text-heading dark:text-white">Kontaktní údaje</h2>
+            
+            <div class="mb-5">
+                <label for="customer_name" class="block mb-2.5 text-sm font-medium @error('customer_name') text-fg-danger-strong dark:text-red-400 @else text-heading dark:text-white @enderror">Celé jméno</label>
+                <!-- Inputs retain a standard background to prevent jarring color shifts on error, while strongly enforcing autofill text and background colors -->
+                <input type="text" id="customer_name" wire:model="customer_name"
+                    class="block w-full px-3 py-2.5 text-sm rounded-base shadow-xs transition-colors bg-neutral-secondary-medium dark:bg-gray-700 placeholder:text-body dark:placeholder-gray-400 [&:-webkit-autofill]:shadow-[inset_0_0_0px_1000px_#F9FAFB] [&:-webkit-autofill]:-webkit-text-fill-color-[#111827] dark:[&:-webkit-autofill]:shadow-[inset_0_0_0px_1000px_#374151] dark:[&:-webkit-autofill]:-webkit-text-fill-color-[#ffffff] @error('customer_name') border border-danger dark:border-red-500 text-fg-danger-strong dark:text-red-400 focus:ring-danger focus:border-danger dark:focus:ring-red-500 dark:focus:border-red-500 @else border border-default-medium dark:border-gray-600 text-heading dark:text-white focus:ring-brand focus:border-brand dark:focus:ring-blue-500 dark:focus:border-blue-500 @enderror" 
+                    placeholder="Vaše jméno">
+                @error('customer_name') 
+                    <p class="mt-2.5 text-sm text-fg-danger-strong dark:text-red-400"><span class="font-medium">Chyba!</span> {{ $message }}</p> 
+                @enderror
+            </div>
+
+            <div class="mb-5">
+                <label for="customer_email" class="block mb-2.5 text-sm font-medium @error('customer_email') text-fg-danger-strong dark:text-red-400 @else text-heading dark:text-white @enderror">E-mail</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                        <svg class="w-4 h-4 @error('customer_email') text-fg-danger-strong dark:text-red-400 @else text-body dark:text-gray-400 @enderror" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                            <path stroke="currentColor" stroke-linecap="round" stroke-width="2" d="m3.5 5.5 7.893 6.036a1 1 0 0 0 1.214 0L20.5 5.5M4 19h16a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1Z"/>
+                        </svg>
+                    </div>
+                    <input type="email" id="customer_email" wire:model="customer_email"
+                        class="block w-full ps-9 pe-3 py-2.5 text-sm rounded-base shadow-xs transition-colors bg-neutral-secondary-medium dark:bg-gray-700 placeholder:text-body dark:placeholder-gray-400 [&:-webkit-autofill]:shadow-[inset_0_0_0px_1000px_#F9FAFB] [&:-webkit-autofill]:-webkit-text-fill-color-[#111827] dark:[&:-webkit-autofill]:shadow-[inset_0_0_0px_1000px_#374151] dark:[&:-webkit-autofill]:-webkit-text-fill-color-[#ffffff] @error('customer_email') border border-danger dark:border-red-500 text-fg-danger-strong dark:text-red-400 focus:ring-danger focus:border-danger dark:focus:ring-red-500 dark:focus:border-red-500 @else border border-default-medium dark:border-gray-600 text-heading dark:text-white focus:ring-brand focus:border-brand dark:focus:ring-blue-500 dark:focus:border-blue-500 @enderror" 
+                        placeholder="vas@email.cz">
                 </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-600 mb-1">E-mail</label>
-                    <input type="email" wire:model="customer_email"
-                        class="w-full p-3 border-2 border-gray-100 rounded-xl focus:border-blue-500 outline-none transition-all">
+                @error('customer_email') 
+                    <p class="mt-2.5 text-sm text-fg-danger-strong dark:text-red-400"><span class="font-medium">Chyba!</span> {{ $message }}</p> 
+                @enderror
+            </div>
+
+            <div class="mb-5">
+                <label for="customer_phone" class="block mb-2.5 text-sm font-medium @error('customer_phone') text-fg-danger-strong dark:text-red-400 @else text-heading dark:text-white @enderror">Telefon</label>
+                <div class="relative">
+                    <div class="absolute inset-y-0 start-0 flex items-center ps-3 pointer-events-none">
+                        <svg class="w-4 h-4 @error('customer_phone') text-fg-danger-strong dark:text-red-400 @else text-body dark:text-gray-400 @enderror" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24">
+                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.427 14.768 17.2 13.542a1.733 1.733 0 0 0-2.45 0l-.613.613a1.732 1.732 0 0 1-2.45 0l-1.838-1.84a1.735 1.735 0 0 1 0-2.452l.612-.613a1.735 1.735 0 0 0 0-2.452L9.237 5.572a1.6 1.6 0 0 0-2.45 0c-3.223 3.2-1.453 7.44 1.086 10.049 2.567 2.566 6.847 4.34 10.554 1.152a1.602 1.602 0 0 0 0-2.005Z"/>
+                        </svg>
+                    </div>
+                    <input type="tel" id="customer_phone" wire:model="customer_phone"
+                        class="block w-full ps-9 pe-3 py-2.5 text-sm rounded-base shadow-xs transition-colors bg-neutral-secondary-medium dark:bg-gray-700 placeholder:text-body dark:placeholder-gray-400 [&:-webkit-autofill]:shadow-[inset_0_0_0px_1000px_#F9FAFB] [&:-webkit-autofill]:-webkit-text-fill-color-[#111827] dark:[&:-webkit-autofill]:shadow-[inset_0_0_0px_1000px_#374151] dark:[&:-webkit-autofill]:-webkit-text-fill-color-[#ffffff] @error('customer_phone') border border-danger dark:border-red-500 text-fg-danger-strong dark:text-red-400 focus:ring-danger focus:border-danger dark:focus:ring-red-500 dark:focus:border-red-500 @else border border-default-medium dark:border-gray-600 text-heading dark:text-white focus:ring-brand focus:border-brand dark:focus:ring-blue-500 dark:focus:border-blue-500 @enderror" 
+                        placeholder="+420 123 456 789">
                 </div>
-                <div>
-                    <label class="block text-sm font-semibold text-gray-600 mb-1">Telefon</label>
-                    <input type="tel" wire:model="customer_phone"
-                        class="w-full p-3 border-2 border-gray-100 rounded-xl focus:border-blue-500 outline-none transition-all">
-                </div>
+                @error('customer_phone') 
+                    <p class="mt-2.5 text-sm text-fg-danger-strong dark:text-red-400"><span class="font-medium">Chyba!</span> {{ $message }}</p> 
+                @enderror
+            </div>
+
+            <div class="mb-5">
+                <label for="customer_notes" class="block mb-2.5 text-sm font-medium @error('customer_notes') text-fg-danger-strong dark:text-red-400 @else text-heading dark:text-white @enderror">Poznámka k rezervaci</label>
+                <textarea id="customer_notes" wire:model="customer_notes" rows="4" 
+                    class="block w-full p-3.5 min-h-[120px] text-sm rounded-base shadow-xs transition-colors bg-neutral-secondary-medium dark:bg-gray-700 placeholder:text-body dark:placeholder-gray-400 @error('customer_notes') border border-danger dark:border-red-500 text-fg-danger-strong dark:text-red-400 focus:ring-danger focus:border-danger dark:focus:ring-red-500 dark:focus:border-red-500 @else border border-default-medium dark:border-gray-600 text-heading dark:text-white focus:ring-brand focus:border-brand dark:focus:ring-blue-500 dark:focus:border-blue-500 @enderror" 
+                    placeholder="Napište případné doplňující informace..."></textarea>
+                @error('customer_notes') 
+                    <p class="mt-2.5 text-sm text-fg-danger-strong dark:text-red-400"><span class="font-medium">Chyba!</span> {{ $message }}</p> 
+                @enderror
             </div>
         </section>
 
-        <section class="bg-gray-50 p-8 rounded-2xl border border-gray-200">
-            <h3 class="font-bold text-gray-800 mb-4 text-lg">Důležité informace k rezervaci</h3>
-            <ul class="space-y-3 text-gray-600 text-sm mb-6">
-                <li class="flex items-start">
-                    <svg class="w-5 h-5 mr-2 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                    </svg>
-                    <span>V ceně kalkulace je automaticky započítán fixní poplatek za spotřebu dřeva.</span>
-                </li>
-                <li class="flex items-start" x-show="cabinRules.pending_window">
-                    <svg class="w-5 h-5 mr-2 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    <span>Po odeslání rezervace je nutné uhradit zálohu nebo plnou částku do <span class="font-bold"
-                            x-text="cabinRules.pending_window"></span> dnů. Jinak bude rezervace automaticky
-                        stornována.</span>
-                </li>
-                <li class="flex items-start">
-                    <svg class="w-5 h-5 mr-2 text-blue-500 flex-shrink-0" fill="none" stroke="currentColor"
-                        viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z">
-                        </path>
-                    </svg>
-                    <span>Veškeré platební údaje, variabilní symbol a pokyny Vám obratem zašleme na uvedený
-                        e-mail.</span>
-                </li>
-            </ul>
+        <!-- 6. Final Summary & Submit -->
+        <section class="p-6 bg-white dark:bg-gray-800 border border-default-medium dark:border-gray-700 rounded-base shadow-xs transition-colors">
+            <h2 class="mb-5 text-lg font-medium text-heading dark:text-white">Shrnutí a odeslání rezervace</h2>
+            
+            <dl class="space-y-3 mb-6 bg-neutral-secondary-medium dark:bg-gray-700/50 p-4 rounded-base border border-default-medium dark:border-gray-600">
+                <div class="flex justify-between text-sm">
+                    <dt class="text-body dark:text-gray-400">Počet nocí:</dt>
+                    <dd class="font-medium text-heading dark:text-white" x-text="nights"></dd>
+                </div>
+                <div class="flex justify-between text-sm">
+                    <dt class="text-body dark:text-gray-400">Počet hostů:</dt>
+                    <dd class="font-medium text-heading dark:text-white" x-text="totalGuests"></dd>
+                </div>
+                <div class="pt-3 border-t border-default-medium dark:border-gray-600 flex justify-between items-center">
+                    <dt class="text-base font-medium text-heading dark:text-white">Předběžná celková cena:</dt>
+                    <dd class="text-xl font-medium text-brand dark:text-blue-400" x-text="formatPrice(totalPrice)"></dd>
+                </div>
+            </dl>
 
-            <label class="flex items-start space-x-3 cursor-pointer pt-4 border-t border-gray-200">
-                <input type="checkbox" wire:model="consent"
-                    class="mt-1 w-5 h-5 rounded text-blue-600 border-gray-300 focus:ring-blue-500">
-                <span class="text-gray-700 text-sm leading-relaxed">
-                    Souhlasím se zpracováním osobních údajů a <a href="#"
-                        class="text-blue-600 underline font-semibold">podmínkami ubytování</a>. Beru na vědomí, že mé
-                    jméno a termín pobytu budou zobrazeny ve veřejném kalendáři obsazenosti. *
-                </span>
-            </label>
-            @error('consent') <span class="text-red-500 text-xs mt-2 block">K odeslání rezervace musíte souhlasit s
-            podmínkami.</span> @enderror
+            <div class="space-y-4">
+                <div class="flex items-center mb-4">
+                    <input wire:model="consent" id="consent" type="checkbox" class="w-4 h-4 border border-default-medium dark:border-gray-600 rounded-xs bg-neutral-secondary-medium dark:bg-gray-700 focus:ring-2 focus:ring-brand-soft dark:focus:ring-blue-600 dark:ring-offset-gray-800 cursor-pointer transition-colors">
+                    <label for="consent" class="ms-2 text-sm font-medium text-heading dark:text-gray-300 select-none cursor-pointer">
+                        Souhlasím s <a href="#" class="text-fg-brand dark:text-blue-400 hover:underline">podmínkami ubytování</a> a <a href="#" class="text-fg-brand dark:text-blue-400 hover:underline">zásadami ochrany osobních údajů</a>.
+                    </label>
+                </div>
+                @error('consent') 
+                    <p class="mt-2.5 text-sm text-fg-danger-strong dark:text-red-400"><span class="font-medium"></span> Musíte potvrdit souhlas.</p> 
+                @enderror
+
+                <button type="button" wire:click="submitReservation" wire:loading.attr="disabled"
+                    :disabled="isOverCapacity || nights === 0"
+                    class="w-full text-white bg-brand dark:bg-blue-600 box-border border border-transparent hover:bg-brand-strong dark:hover:bg-blue-700 focus:ring-4 focus:ring-brand-medium dark:focus:ring-blue-800 shadow-xs font-medium leading-5 rounded-base text-sm px-4 py-3 focus:outline-none disabled:opacity-50 disabled:dark:bg-gray-600 disabled:cursor-not-allowed transition-colors relative">
+                    
+                    <span wire:loading.remove wire:target="submitReservation">Odeslat rezervaci</span>
+                    
+                    <span wire:loading wire:target="submitReservation" class="flex items-center justify-center">
+                        <svg class="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </span>
+                </button>
+            </div>
         </section>
-
-        <div class="flex justify-end">
-            <button type="submit" :disabled="isOverCapacity || nights === 0"
-                :class="(isOverCapacity || nights === 0) ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 transform hover:-translate-y-1 active:scale-95'"
-                class="text-white font-black py-4 px-12 rounded-2xl shadow-xl transition-all text-lg">
-                Odeslat rezervaci
-            </button>
-        </div>
     </form>
 
     @script
@@ -149,13 +238,23 @@
             nights: 0,
             totalPrice: 0,
             availableBeds: 0,
-            guestLabels: {
+            
+            guestLabelsSingular: {
                 graduate: 'Absolvent',
                 student: 'Student',
                 child: 'Dítě',
                 external: 'Externista',
                 dog: 'Pes'
             },
+            
+            guestLabels: {
+                graduate: 'Absolventů',
+                student: 'Studentů',
+                child: 'Dětí',
+                external: 'Externistů',
+                dog: 'Psů'
+            },
+            
             guests: {
                 graduate: 0,
                 student: 0,
@@ -165,46 +264,59 @@
             },
 
             async init() {
-                // Fetch the central availability data and global settings from the API
-                const response = await fetch('/api/availability');
-                const data = await response.json();
-                this.cabinRules = data.cabin_rules;
-                this.bookings = data.bookings;
-
-                // Initialize the default available capacity assuming an empty cabin
-                this.availableBeds = this.cabinRules.bed_capacity || 0;
-
-                this.initPicker();
-
-                // Trigger a price recalculation anytime a guest counter is modified
-                this.$watch('guests', () => this.calculatePrice(), { deep: true });
+                // Incorporate error handling so JS doesn't crash entirely if the fetch fails
+                try {
+                    const response = await fetch('/api/availability');
+                    const data = await response.json();
+                    this.cabinRules = data.cabin_rules || {};
+                    this.bookings = data.bookings || [];
+                    this.availableBeds = this.cabinRules.bed_capacity || 0;
+                } catch (error) {
+                    console.error('Error fetching availability:', error);
+                } finally {
+                    this.initPicker();
+                    this.$watch('guests', () => this.calculatePrice(), { deep: true });
+                }
             },
 
             initPicker() {
-                // Calculates the maximum allowable booking date exactly one year from the current date
                 const maxAllowedDate = new Date();
                 maxAllowedDate.setFullYear(maxAllowedDate.getFullYear() + 1);
+
+                // Collect fully reserved bookings to physically lock them in the date picker
+                let lockedDays = [];
+                this.bookings.forEach(b => {
+                    if (b.reserve_whole) {
+                        lockedDays.push([b.start_date, b.end_date]);
+                    }
+                });
 
                 const picker = new Litepicker({
                     element: this.$refs.litepicker,
                     singleMode: false,
                     numberOfMonths: window.innerWidth > 768 ? 2 : 1,
                     numberOfColumns: window.innerWidth > 768 ? 2 : 1,
-                    // Locks the earliest selectable date to the current day
                     minDate: new Date(),
-                    // Locks the latest selectable date to one year in the future
                     maxDate: maxAllowedDate,
+                    lockDays: [],
                     format: 'DD.MM.YYYY',
                     lang: 'cs-CZ',
                     setup: (picker) => {
                         picker.on('selected', (date1, date2) => {
+                            // Safely handles when a user clicks away before selecting end date
+                            if (!date1 || !date2) return;
+
                             const start = date1.format('YYYY-MM-DD');
                             const end = date2.format('YYYY-MM-DD');
-
+                            
                             this.nights = Math.ceil((date2.getTime() - date1.getTime()) / (1000 * 60 * 60 * 24));
-
                             $wire.set('start_date', start);
                             $wire.set('end_date', end);
+                            
+                            // Safely binds the updated value back to the input
+                            if(this.$refs.litepicker) {
+                                this.$refs.litepicker.value = `${date1.format('DD.MM.YYYY')} - ${date2.format('DD.MM.YYYY')}`;
+                            }
 
                             this.calculateAvailability(start, end);
                             this.calculatePrice();
@@ -213,84 +325,55 @@
                 });
             },
 
-            // Calculates how many beds remain available within the user's selected date range
             calculateAvailability(startStr, endStr) {
                 let start = new Date(startStr);
                 let end = new Date(endStr);
-
-                // Track the "busiest" night within the selected date range
                 let maxReserved = 0;
                 let isLocked = false;
 
-                // Loop through every single night of the requested stay
                 for (let d = new Date(start); d < end; d.setDate(d.getDate() + 1)) {
                     let currentStr = this.formatDate(d);
                     let reservedForNight = 0;
 
-                    // Check the current night against every active booking from the API
                     for (let i = 0; i < this.bookings.length; i++) {
                         let b = this.bookings[i];
-
-                        // If the existing booking overlaps with the current night
                         if (currentStr >= b.start_date && currentStr < b.end_date) {
-                            // If any night is entirely blocked, the whole range is invalid
                             if (b.reserve_whole) {
                                 isLocked = true;
                                 break;
                             }
-                            // Accumulate the number of beds taken on this specific night
                             reservedForNight += b.reserved_beds;
                         }
                     }
-
-                    // Stop checking future nights if we hit a hard lockout
                     if (isLocked) break;
-
-                    // Update the max peak constraint. The available beds for the whole trip 
-                    // is limited by the single busiest night in the range.
-                    if (reservedForNight > maxReserved) {
-                        maxReserved = reservedForNight;
-                    }
+                    if (reservedForNight > maxReserved) maxReserved = reservedForNight;
                 }
-
-                // Update the UI state based on the loop results
-                if (isLocked) {
-                    this.availableBeds = 0;
-                } else {
-                    this.availableBeds = this.cabinRules.bed_capacity - maxReserved;
-                }
+                this.availableBeds = isLocked ? 0 : Math.max(0, this.cabinRules.bed_capacity - maxReserved);
             },
 
-            // Helper function to format JS dates into YYYY-MM-DD consistently without timezone shifting bugs
             formatDate(date) {
                 const d = new Date(date);
                 let month = '' + (d.getMonth() + 1);
                 let day = '' + d.getDate();
                 const year = d.getFullYear();
-
                 if (month.length < 2) month = '0' + month;
                 if (day.length < 2) day = '0' + day;
-
                 return [year, month, day].join('-');
             },
 
-            // Computed property summarizing total guests selected by the user
             get totalGuests() {
                 return this.guests.graduate + this.guests.student + this.guests.child + this.guests.external;
             },
 
-            // Evaluates if the form should be locked down due to capacity constraints
             get isOverCapacity() {
                 return this.nights > 0 && this.totalGuests > this.availableBeds;
             },
 
-            // Safely increment a guest category and sync to Livewire
             increment(key) {
                 this.guests[key]++;
                 $wire.set(key + '_count', this.guests[key]);
             },
 
-            // Safely decrement a guest category, preventing negative numbers, and sync to Livewire
             decrement(key) {
                 if (this.guests[key] > 0) {
                     this.guests[key]--;
@@ -298,32 +381,21 @@
                 }
             },
 
-            // Client-side estimation of the total price
             calculatePrice() {
                 if (this.nights === 0) return;
-
                 let nightlySum = 0;
                 const p = this.cabinRules.prices;
-
-                // Multiply guest counts by their respective category prices
                 nightlySum += this.guests.graduate * p.graduate;
                 nightlySum += this.guests.student * p.student;
                 nightlySum += this.guests.child * p.child;
                 nightlySum += this.guests.external * p.external;
-                if (p.dog) {
-                    nightlySum += this.guests.dog * p.dog;
-                }
-
-                // Add the flat nightly fee for wood consumption
-                if (p.wood) {
-                    nightlySum += p.wood;
-                }
-
+                if (p.dog) nightlySum += this.guests.dog * p.dog;
+                if (p.wood) nightlySum += p.wood;
                 this.totalPrice = nightlySum * this.nights;
             },
 
             formatPrice(val) {
-                return new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK' }).format(val);
+                return new Intl.NumberFormat('cs-CZ', { style: 'currency', currency: 'CZK', maximumFractionDigits: 0 }).format(val);
             }
         }));
     </script>

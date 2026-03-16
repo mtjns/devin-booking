@@ -26,10 +26,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        // Force HTTPS for asset URLs when not in local development (e.g., production, staging)
-        if (!app()->isLocal()) {
-            URL::forceScheme('https');
-        }
+        // // Force HTTPS in production
+        // if (config('app.env') === 'production') {
+        //     URL::forceScheme('https');
+        // }
 
         Booking::observe(BookingObserver::class);
 
