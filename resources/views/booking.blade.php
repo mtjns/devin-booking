@@ -48,12 +48,35 @@
             if (beds >= 2 && beds <= 4) return beds + ' lůžka';
             return beds + ' lůžek';
         }
+
+        function calendarEventTitle(booking) {
+            text = booking.customer_name + ' (';
+            if (booking.reserve_whole) {
+                text += 'Celá chata'
+            } else {
+                text += luzkaText(booking.reserved_beds);
+            }
+            if (booking.status == "pending") {
+                text += '; rezervace';
+            } else if (booking.status == "deposit_paid") {
+                text += '; potvrzeno';
+            }
+            text += ')';
+            return text;
+        }
     </script>
 
     <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.11/locales/cs.global.min.js"></script>
 
-    <script src="https://cdn.jsdelivr.net/npm/litepicker/dist/litepicker.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"
+        media="(prefers-color-scheme: light)">
+
+    <link rel="stylesheet" href="https://npmcdn.com/flatpickr/dist/themes/dark.css"
+        media="(prefers-color-scheme: dark)">
+
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="https://npmcdn.com/flatpickr/dist/l10n/cs.js"></script>
 
     @livewireStyles
 
@@ -160,50 +183,6 @@
             .fc-day-other .fc-daygrid-day-top {
                 opacity: 0.3;
             }
-
-            /* Litepicker Dark Mode overrides */
-            .litepicker {
-                background-color: #1F2937 !important;
-                border-color: #374151 !important;
-                color: #F9FAFB !important;
-            }
-
-            .litepicker .container__months .month-item-name,
-            .litepicker .container__months .month-item-year {
-                color: #F9FAFB !important;
-            }
-
-            .litepicker .container__months .month-item-weekdays-row>div {
-                color: #9CA3AF !important;
-            }
-
-            .litepicker .container__days .day-item {
-                color: #D1D5DB !important;
-            }
-
-            .litepicker .container__days .day-item:hover {
-                color: #1C64F2 !important;
-                box-shadow: inset 0 0 0 1px #1C64F2 !important;
-            }
-
-            .litepicker .container__days .day-item.is-today {
-                color: #FCA5A5 !important;
-            }
-
-            .litepicker .container__days .day-item.is-locked {
-                color: #4B5563 !important;
-                background-color: transparent !important;
-            }
-
-            .litepicker .container__days .day-item.is-in-range {
-                background-color: #374151 !important;
-            }
-
-            .litepicker .container__days .day-item.is-start-date,
-            .litepicker .container__days .day-item.is-end-date {
-                background-color: #1C64F2 !important;
-                color: #ffffff !important;
-            }
         }
     </style>
 </head>
@@ -216,10 +195,18 @@
         <p class="text-body dark:text-gray-400 mt-2 text-sm">Chata Děvín</p>
     </div>
 
+    <!-- API request failed message -->
+    <div x-data="{ apiError: false }" id="api-error" class="max-w-4xl mx-auto mb-8 px-4" x-show="apiError">
+        <div class="p-6 bg-danger-soft dark:bg-gray-700 border border-danger rounded-base shadow-xs">
+            <h2 class="text-lg dark:text-white font-medium text-danger mb-2">Chyba načítání dat</h2>
+            <p class="text-sm text-danger-subtle">Nastala chyba při načítání dostupnosti. Zkuste to prosím znovu později.</p>
+        </div>
+    </div>
+
     <div class="max-w-4xl mx-auto px-4 mb-8">
         <div
             class="p-6 bg-white dark:bg-gray-800 border border-default-medium dark:border-gray-700 rounded-base shadow-xs transition-colors">
-            <h2 class="text-lg font-medium text-heading dark:text-white mb-6">Dostupnost kapacity</h2>
+            <h2 class="text-lg font-medium text-heading text-center dark:text-white mb-6">Kalendář dostupnosti</h2>
             <div id="availability-calendar"></div>
             <p class="text-sm text-body dark:text-gray-400 mt-4">
                 V kalendáři jsou zobrazeny pouze rezervované noci. Dny odjezdu se nezobrazují.
@@ -259,14 +246,19 @@
 
                 events: function (info, successCallback, failureCallback) {
                     fetch('/api/availability')
-                        .then(response => response.json())
+                        .then(response => {
+                            if (!response.ok) {
+                                throw response;
+                            }
+                            return response.json();
+                        })
                         .then(data => {
                             const events = [];
 
                             data.bookings.forEach(booking => {
                                 if (booking.reserve_whole) {
                                     events.push({
-                                        title: booking.customer_name + ' (Celá chata)',
+                                        title: calendarEventTitle(booking),
                                         start: booking.start_date,
                                         end: booking.end_date,
                                         color: '#EF4444',
@@ -274,7 +266,7 @@
                                     });
                                 } else {
                                     events.push({
-                                        title: booking.customer_name + ' (' + luzkaText(booking.reserved_beds) + ')',
+                                        title: calendarEventTitle(booking),
                                         start: booking.start_date,
                                         end: booking.end_date,
                                         color: '#3F83F8',
@@ -284,9 +276,15 @@
                             });
 
                             successCallback(events);
+                            apiError = false;
                         })
                         .catch(error => {
-                            console.error('Error fetching calendar data:', error);
+                            if (error?.status === 429) {
+                                console.warn('Availability API throttled (429).');
+                            } else {
+                                console.error('Error fetching calendar data:', error);
+                            }
+                            apiError = true;
                             failureCallback(error);
                         });
                 }

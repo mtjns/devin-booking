@@ -24,7 +24,7 @@ class AvailabilityController extends Controller
                 // Calculate the total number of guests for this specific booking
                 $totalGuests = $booking->graduate_count + $booking->student_count + $booking->child_count + $booking->external_count;
 
-                // Return a simplified array for each booking containing only the necessary public data
+                // Return a simplified array for each booking containing only the necessary public data - safety
                 return [
                     'id' => $booking->id,
                     'customer_name' => $booking->customer_name,
@@ -32,6 +32,7 @@ class AvailabilityController extends Controller
                     'end_date' => $booking->end_date->format('Y-m-d'),
                     'reserved_beds' => $totalGuests,
                     'reserve_whole' => $booking->reserve_whole,
+                    'status' => $booking->status,
                 ];
             });
 

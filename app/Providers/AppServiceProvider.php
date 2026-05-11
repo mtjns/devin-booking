@@ -10,6 +10,9 @@ use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\Mail;
 use App\Mail\SystemCrashNotice;
 use Illuminate\Support\Facades\URL;
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -32,6 +35,10 @@ class AppServiceProvider extends ServiceProvider
         // }
 
         Booking::observe(BookingObserver::class);
+
+        RateLimiter::for('availability', function (Request $request) {
+            return Limit::perMinute(300)->by($request->ip());
+        });
 
         // Listens for any background job that exhausts its maximum retry attempts
         Queue::failing(function (JobFailed $event) {

@@ -7,5 +7,10 @@ chmod 777 storage storage/logs storage/framework storage/framework/cache storage
 # Clear stale provider cache that may reference removed packages
 rm -f bootstrap/cache/packages.php
 
-# Run supervisord
-exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
+# If command is passed (e.g., queue:work), run it directly
+# Otherwise run supervisord
+if [ $# -gt 0 ]; then
+    exec "$@"
+else
+    exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf
+fi

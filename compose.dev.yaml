@@ -63,14 +63,22 @@ services:
     env_file:
       - .dev.env
     environment:
-      MYSQL_DATABASE: devin_booking
-      MYSQL_USER: devin
-      MYSQL_PASSWORD: change_me
-      MYSQL_ROOT_PASSWORD: root_change_me
+      DB_DATABASE: ${DB_DATABASE:-devin_booking}
+      DB_USER: ${DB_USERNAME:-devin}
+      DB_PASSWORD: ${DB_PASSWORD:-change_me}
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-root_change_me}
+    command:
+      --innodb-buffer-pool-size=64M --max-connections=50
     volumes:
       - db-data:/var/lib/mysql
     ports:
       - "3306:3306"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
       interval: 5s

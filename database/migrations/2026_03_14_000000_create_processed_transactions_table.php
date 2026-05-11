@@ -12,10 +12,10 @@ return new class extends Migration {
     {
         Schema::create('processed_transactions', function (Blueprint $table) {
             $table->id();
-            $table->string('transaction_id')->unique(); // Fio Bank transaction ID (Column22)
+            $table->string('transaction_id')->unique(); // Fio Bank transaction ID
             $table->foreignId('booking_id')->nullable()->constrained('bookings')->nullOnDelete();
             $table->string('variable_symbol');
-            $table->integer('amount'); // Amount in CZK
+            $table->integer('amount');
             $table->string('status')->default('processed'); // processed, failed, skipped
             $table->text('notes')->nullable(); // Why it was skipped, error messages, etc.
             $table->timestamps();

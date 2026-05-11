@@ -18,6 +18,9 @@ git clone git@github.com:YOUR_USERNAME/devin-booking.git
 cd devin-booking
 ```
 
+- **Delete unnecessary files**
+You may delete the `compose.dev.yml` and `compose.test.yml`, you then dont have to use -f flag with docker compose commands. The `compose.yml` is the only one used in production.
+
 #### 1.1 Basic server hardening and auto-updates
 
 - Create a non-root user (done during Ubuntu install) and add it to the `docker` group:
@@ -109,25 +112,26 @@ Set at least:
 
 ### 3. Build and start the stack
 
-From the project directory on the server:
+From the project directory on the server, build the Docker image and start the stack:
 
 ```bash
-rm compose.yml  # Remove the compose file if it exists, it is for developement only and not used in production
-docker compose -f docker-compose.yml build
-docker compose -f docker-compose.yml up -d
+docker compose build
+docker compose up -d
 ```
 
 This will:
 
-- Build the `devin-booking-app` image (PHP-FPM + Nginx + built frontend).
+- Build the `devin-booking-app:latest` image (PHP-FPM + Nginx + built frontend).
 - Start:
-  - `app` (web server)
+  - `app` (web server, accessible via Caddy)
   - `queue` (queue worker)
   - `scheduler` (Laravel scheduler)
   - `db` (MySQL)
-  - `backup` (automated nightly DB backups)
+  - `backup` (automated daily DB backups)
+  - `caddy` (reverse proxy with HTTPS)
+  - `meilisearch` (search engine)
 
-The app will be available on port `8080` by default (see `docker-compose.yml`).
+The app will be available via Caddy on HTTPS (port 443) once configured, or for debugging at `http://YOUR_SERVER_IP` (port 80).
 
 ### 4. Run database migrations (first deploy)
 
@@ -148,7 +152,7 @@ docker compose exec app php artisan db:seed --force # Only if you want to add te
 Once migrations are complete, create your first admin account using Laravel Tinker:
 
 ```bash
-docker compose -f docker-compose.yml exec app php artisan tinker
+docker compose exec app php artisan tinker
 ```
 
 In the Tinker shell, paste this and replace the values with your actual credentials:
@@ -172,8 +176,8 @@ You can now log in to the admin panel with the email and password you just creat
 
 ### 5. Accessing the app
 
-- For initial testing (without HTTPS), from your browser: `http://YOUR_SERVER_IP:8080`
-- In production, you can access the app via HTTPS once Caddy is configured (see below), e.g. `https://your-domain.example`.
+- For initial testing (without HTTPS), access via HTTP: `http://YOUR_SERVER_IP` (direct port 80)
+- In production, access via HTTPS once Caddy is configured: `https://your-domain.example` (from `APP_PRIMARY_DOMAIN` in `.env`)
 
 ### 6. Updating to a new version
 
@@ -183,16 +187,16 @@ When you push new code to GitHub and want to deploy it:
 ssh youruser@your-server
 cd /srv/devin-booking
 git pull origin main        # or your default branch
-docker compose -f docker-compose.yml build        # rebuild the app image if code or deps changed
-docker compose -f docker-compose.yml up -d        # recreate containers with the new image
-docker compose -f docker-compose.yml exec app php artisan migrate --force
+docker compose build        # rebuild the app image if code or deps changed
+docker compose up -d        # recreate containers with the new image
+docker compose exec app php artisan migrate --force
 
 # Optimize application (cache config, routes, and views for performance)
-docker compose -f docker-compose.yml exec app php artisan optimize
-docker compose -f docker-compose.yml exec app php artisan view:cache
+docker compose exec app php artisan optimize
+docker compose exec app php artisan view:cache
 
 # Restart queue worker so it picks up the new code
-docker compose -f docker-compose.yml exec app php artisan queue:restart
+docker compose exec app php artisan queue:restart
 ```
 
 ### 7. Data persistence and backups
@@ -200,8 +204,8 @@ docker compose -f docker-compose.yml exec app php artisan queue:restart
 - **Database data** is stored in the `db-data` Docker volume.
 - **Application storage** (e.g. files under `storage/`) is stored in the `storage-data` volume.
 - **Automated backups**:
-  - The `backup` service in `docker-compose.yml` connects to the `db` container once per day and creates a compressed dump in the `backups` directory (relative to the project root), with names like `backup-YYYY-MM-DD-HHMMSS.sql.gz`.
-  - Old backups older than 14 days are automatically deleted inside the container to keep disk usage under control.
+  - The `backup` service in `compose.yml` connects to the `db` container once per day and creates a compressed dump in the `backups` directory (relative to the project root), with names like `backup-YYYY-MM-DD-HHMMSS.sql.gz`.
+  - Old backups older than 30 days are automatically deleted inside the container to keep disk usage under control.
 
 You should still periodically copy a backup file off the server (e.g. to your laptop or cloud storage) for disaster recovery.
 
@@ -220,7 +224,7 @@ You should still periodically copy a backup file off the server (e.g. to your la
 4. **Import it into the running `db` container**:
 
    ```bash
-   docker compose -f docker-compose.yml exec -T db mysql -u"$DB_USERNAME" -p"$DB_PASSWORD" "$DB_DATABASE" < backups/backup-2026-03-05-030000.sql
+   docker compose exec -T db mysql -u"$DB_USERNAME" -p"$DB_PASSWORD" "$DB_DATABASE" < backups/backup-2026-03-05-030000.sql
    ```
 
 5. **Bring the app back**:
@@ -234,15 +238,15 @@ Always test this process on a non-production environment at least once so you ar
 - Docker logs:
 
 ```bash
-docker compose -f docker-compose.yml logs app
-docker compose -f docker-compose.yml logs queue
-docker compose -f docker-compose.yml logs scheduler
+docker compose logs app
+docker compose logs queue
+docker compose logs scheduler
 ```
 
 - Restart a single service:
 
 ```bash
-docker compose -f docker-compose.yml restart app
+docker compose restart app
 ```
 
 ### 9. Testing Email Delivery & Layouts
@@ -250,7 +254,7 @@ docker compose -f docker-compose.yml restart app
 Once your SMTP is configured in `.env`, you can safely trigger a full test of the mailing system. This will inject a temporary booking, send exactly one of every email template to an address of your choosing, and then immediately map and delete the test data.
 
 ```bash
-docker compose -f docker-compose.yml exec app php artisan app:send-test-emails your@email.com
+docker compose exec app php artisan app:send-test-emails your@email.com
 ```
 
 ### 10. Automated Payment Processing (Fio Bank API)
@@ -267,11 +271,11 @@ If you have a Fio Bank account and want to automatically match incoming payments
    ```
 4. Run the database migration to create the `processed_transactions` table (this tracks which bank transactions have been processed, preventing duplicates):
    ```bash
-   docker compose -f docker-compose.yml exec app php artisan migrate
+   docker compose exec app php artisan migrate
    ```
 5. The system is now configured. To test it manually:
    ```bash
-   docker compose -f docker-compose.yml exec app php artisan bookings:process-fio-payments
+   docker compose exec app php artisan bookings:process-fio-payments
    ```
 
 **Testing with simulated payments:**
@@ -280,7 +284,7 @@ You can test the payment workflow without touching real bank data using the test
 
 ```bash
 # Test a single payment
-docker compose -f docker-compose.yml exec app php artisan bookings:test-fio-payment "VS1234567" 5000
+docker compose exec app php artisan bookings:test-fio-payment "VS1234567" 5000
 
 # This will:
 # - Find the booking with variable symbol "VS1234567"
@@ -295,7 +299,7 @@ Before setting up automated processing, verify that your API token works:
 
 ```bash
 # Connect to Fio Bank API and see what transactions exist (dry-run, no processing)
-docker compose -f docker-compose.yml exec app php artisan bookings:test-fio-api
+docker compose exec app php artisan bookings:test-fio-api
 
 # This will:
 # - Verify the token is configured
@@ -305,7 +309,7 @@ docker compose -f docker-compose.yml exec app php artisan bookings:test-fio-api
 # - Display what status changes would be triggered
 
 # If everything looks good, process the transactions:
-docker compose -f docker-compose.yml exec app php artisan bookings:test-fio-api --process
+docker compose exec app php artisan bookings:test-fio-api --process
 ```
 
 **Scheduling automated processing:**
@@ -319,7 +323,7 @@ The Fio Bank payment processing is automatically scheduled in your application's
 You can still run it manually at any time with:
 
 ```bash
-docker compose -f docker-compose.yml exec app php artisan bookings:process-fio-payments
+docker compose exec app php artisan bookings:process-fio-payments
 ```
 
 To change the schedule, edit `routes/console.php` and modify the schedule definition (e.g., running it twice daily, or at a different time).
@@ -333,7 +337,7 @@ To change the schedule, edit `routes/console.php` and modify the schedule defini
 
 ### 11. HTTPS with Caddy (reverse proxy in Docker)
 
-This project includes a `caddy` service in `docker-compose.yml` that can terminate HTTPS and proxy requests to the `app` container.
+This project includes a `caddy` service in `compose.yml` that can terminate HTTPS and proxy requests to the `app` container.
 
 **Requirements:**
 
@@ -353,18 +357,17 @@ This project includes a `caddy` service in `docker-compose.yml` that can termina
 4. Rebuild and restart the stack:
 
    ```bash
-   docker compose -f docker-compose.yml up -d caddy
+   docker compose up -d caddy
    ```
 
-   (If the app is already running, Caddy will join the stack and start handling HTTPS.)
+   (If the app and database are already running, Caddy will join the stack and start handling HTTPS.)
 
-Once configured, your users should access the site via `https://your-domain.example` (using the value you set in `APP_PRIMARY_DOMAIN`). The app remains accessible on `http://YOUR_SERVER_IP:8080` for debugging, but in production you can restrict that port using a firewall if desired.
+Once configured, your users should access the site via `https://your-domain.example` (using the value you set in `APP_PRIMARY_DOMAIN`). The app uses ports 80/443 through Caddy for all public traffic.
 
 ### 11. Security and hardening notes
 
 - Use strong passwords for:
   - Database users
   - Any admin accounts
-- Restrict direct access to the MySQL port (use firewall or avoid publishing it if not needed).
-- For production, prefer accessing the app only via HTTPS through the `caddy` service, and restrict or close direct access to port 8080 from the internet.
-
+- Keep your server's OS and Docker up to date with security patches.
+- Regularly monitor logs for any suspicious activity.

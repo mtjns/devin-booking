@@ -11,7 +11,9 @@ Route::get('/', function () {
 })->name('home');
 
 // Availability api
-Route::get('/api/availability', [AvailabilityController::class, 'index'])->name('api.availability');
+Route::get('/api/availability', [AvailabilityController::class, 'index'])
+    ->middleware('throttle:availability')
+    ->name('api.availability');
 
 Route::get('/health', function () {
     $checks = [
@@ -36,9 +38,9 @@ Route::get('/health', function () {
     }
 
     $checks['storage'] = is_writable(storage_path());
-    $checks['app_key'] = ! empty(config('app.key'));
+    $checks['app_key'] = !empty(config('app.key'));
 
-    $overallOk = ! in_array(false, $checks, true);
+    $overallOk = !in_array(false, $checks, true);
 
     return response()->json([
         'status' => $overallOk ? 'ok' : 'error',

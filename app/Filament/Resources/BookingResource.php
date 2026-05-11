@@ -223,11 +223,24 @@ class BookingResource extends Resource
                             ->disabled(fn(Forms\Get $get): bool => empty($get('customer_email')) || $get('total_price') <= 0 || (!empty($get('end_date')) && \Carbon\Carbon::parse($get('end_date'))->endOfDay()->isPast()))
                             ->dehydrated(),
                     ])->columns(1),
-                Forms\Components\DatePicker::make('last_warning_at')
-                    ->displayFormat('d.m.Y')
-                    ->label('Naposledy upozorněno na platbu')
-                    ->helperText('! Změna může něco rozbít !'),
+                Forms\Components\Section::make('Administrační data')
+                    ->description('Změň pokud víš co děláš, může způsobit problémy u kontroly záloh')
+                    ->schema([
+                        Forms\Components\DatePicker::make('last_warning_at')
+                            ->displayFormat('d.m.Y')
+                            ->label('Naposledy upozorněno na platbu')
+                            ->helperText('! Změna může něco rozbít !'),
+                        Forms\Components\DatePicker::make('created_at')
+                            ->displayFormat('d.m.Y')
+                            ->label('Datum vytvoření')
+                            ->helperText('! Změna může něco rozbít !'),
+                        Forms\Components\DatePicker::make('updated_at')
+                            ->displayFormat('d.m.Y')
+                            ->label('Naposledy upraveno')
+                            ->helperText('! Změna může něco rozbít !'),
+                    ])->columns(3),
             ]);
+
     }
 
     public static function table(Table $table): Table

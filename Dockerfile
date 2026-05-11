@@ -6,6 +6,9 @@ RUN apk add --no-cache \
     icu-dev \
     oniguruma-dev \
     libzip-dev \
+    freetype-dev \
+    libjpeg-turbo-dev \
+    libpng-dev \
     zip \
     unzip \
     curl \
@@ -15,6 +18,8 @@ RUN apk add --no-cache \
     npm
 
 RUN docker-php-ext-install intl mbstring zip pdo pdo_mysql
+
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg && docker-php-ext-install gd
 
 WORKDIR /var/www/html
 
