@@ -182,3 +182,143 @@ backups together.
   `vendor/` and migrations reflect the new build (no stale volume).
 - **#5:** `curl -I https://<domain>` shows the new security headers.
 - **#11/#12:** `php artisan test` green in CI against a MySQL service; `pint --test` clean.
+
+---
+
+## Appendix — Build vs. Buy, Hosting & Pricing (optimized for lowest cost)
+
+This app is really two things: (1) a **custom shared-bed availability + pricing engine**
+(per-night capacity, guest categories, whole-cabin blocking, deposits, Czech *variable
+symbol*) — the genuine product, hard to buy off-the-shelf; and (2) a large pile of
+**self-hosted plumbing + a poll-based bank reconciler** — which is where almost all the risk
+lives and which is cheap to replace with managed pieces. Recommendation: **keep the brain,
+rent the plumbing.** A full booking SaaS (Lodgify/Smoobu/Beds24) is rejected because those
+model a property as one atomic unit and won't support the shared-bed-by-category model or the
+Czech bank-transfer flow without giving one of them up.
+
+### Payments — cheapest is to keep bank transfer
+Bank transfer via Fio has **0% transaction fees**; every card gateway takes a cut, so a paid
+gateway is a reliability/UX upgrade, not a cost saving.
+
+| Option | Per-transaction | Monthly | Notes |
+|---|---|---|---|
+| **Keep Fio bank transfer** (current) | **0%** | **0 Kč** | Cheapest. Fix token-in-logs (#1) + harden matching instead of switching. |
+| Comgate | 0.79–0.99% (cards) | 0–149 Kč | Cheapest CZ card gateway; free setup/payouts; prices frozen to 31 Dec 2026. |
+| GoPay | low %, tiered | 0 Kč if turnover >50k/mo, else 80 Kč | Comparable. |
+
+Variable-symbol matching is inherent to *any* bank-transfer method. A gateway only removes it
+if you move to **card** payments (signed, pushed webhooks instead of 10-min polling) — worth it
+only if you want cards or the polling keeps causing incidents.
+
+### Hosting — cheapest reliable options
+
+| Option | Cost/mo | What you get | Ops burden |
+|---|---|---|---|
+| **Hetzner CX22 + existing (hardened) Compose** | **~€3.79 (~$4)** | Cheapest solid EU VPS, 20 TB traffic | You patch/deploy (compose already exists) |
+| **Hetzner + Ploi** | ~$12 total | Managed deploys, migrate-on-deploy, SSL, backups, monitoring | Low |
+| Hetzner + Laravel Forge | ~$16 total | Same idea, 1 server on Hobby | Low |
+| Laravel Cloud | $5 credit + usage (~$15–30+ realistic) | Zero-ops, but always-on web+queue+scheduler means scale-to-zero doesn't help | None |
+| Full booking SaaS | ~$30–50+ | No servers | None, but **doesn't fit the model** |
+
+### Near-free supporting services
+- **Email:** Resend free tier (3,000/mo) = **$0**, or Amazon SES (~$0.10 / 1,000). Replaces raw
+  SMTP with real deliverability + bounce handling. (Fixes #4 in the email/SMTP sense.)
+- **Backups:** keep MySQL on the VPS; ship nightly dumps **offsite** to Backblaze B2 or a
+  Hetzner Storage Box (~€0–3/mo). Cheaply fixes #15.
+- **Search:** **drop Meilisearch** — a whole service + key + RAM used only for admin filtering
+  of a small table. Free savings; removes a service and attack surface.
+- **Managed DB (PlanetScale/DO/RDS ~$15+/mo):** skip for cost reasons; offsite dumps cover the
+  real risk at this scale.
+
+### Cheapest recommended architecture (keeps the custom model)
+- **Host:** Hetzner CX22 (~$4), optionally + Ploi (+$8) to drop the babysitting
+- **Payments:** keep Fio bank transfer ($0) — fix token logging (#1) + harden matching
+- **Email:** Resend free tier ($0)
+- **Backups:** dumps → Backblaze B2 (~$0)
+- **Drop:** Meilisearch
+- **Total: ~$4/mo DIY, or ~$12/mo hands-off** — vs. $30–50+ for a SaaS that wouldn't fit.
+
+_Pricing verified August 2026; Czech gateway rates frozen to end-2026 per Comgate. Sources:
+Comgate online-payments pricing, GoPay ceník, Laravel Cloud pricing, Hetzner Cloud pricing,
+Ploi/Forge pricing pages, Resend/SES/Postmark pricing. Figures drift — re-check before
+committing spend._
+
+---
+
+## Appendix — Payment migration: Fio Bank → Comgate (bank switching to ČSOB)
+
+### Why
+The bank is moving to **ČSOB**, which has no Fio-style token API, so the current
+`bookings:process-fio-payments` polling reconciliation will stop working. Replace it with the
+**Comgate** gateway. Chosen setup: **deposit-only** payment per booking; checkout offers **all
+methods** (card, QR/bank transfer, Apple/Google Pay).
+
+### How Comgate verifies a QR / bank-transfer payment
+The QR the customer scans contains **Comgate's own collection account** and a **unique variable
+symbol Comgate assigns** (the customer can't change amount, VS, or recipient). So the money lands
+in Comgate's account and **Comgate** matches the incoming transfer by that VS — you never read a
+bank. Flow:
+1. On booking creation, the app calls Comgate to **create a payment** for the deposit, passing the
+   booking's `variable_symbol` as `refId`; Comgate returns a `transId` + payment URL.
+2. Customer pays (card = instant; QR/bank transfer = pending until funds arrive, seconds to hours
+   unless instant payment).
+3. Comgate matches the transfer on its side, flips `PENDING → PAID`, and **pushes a callback**
+   (`id`/transId, `refId`, `status`) to the app — retried up to ~1,000× until it gets a 2xx.
+4. The app **verifies via Comgate's `/status` endpoint** with the `transId` (never trusting raw
+   callback params), then marks the booking paid.
+5. Comgate **settles payouts to the ČSOB account** in daily/monthly batches. ČSOB only *receives*
+   money; nothing reconciles against it — which is exactly why the missing ČSOB API stops mattering.
+
+### Fit with the existing "QR in email" model
+The confirmation email swaps the SPD QR-platba image for a **"Zaplatit zálohu" button** to the
+Comgate payment URL (optionally plus a QR *of that URL* for mobile). Bank-transfer-by-scan still
+exists — as a method **on Comgate's page** — but now Comgate confirms it automatically.
+
+### Customer-facing copy to add (payment/confirmation email + booking form)
+Because QR/standard bank transfers are **not instant**, the customer must be told the reservation
+is not final until the money actually arrives. Add a short notice near the pay button (and on the
+booking form), e.g. in Czech:
+
+> **Rezervace je závazně potvrzena až po připsání platby.** Do té doby může být rezervace
+> zrušena (např. při vypršení lhůty pro úhradu nebo obsazení termínu). Pro okamžité potvrzení
+> doporučujeme platbu **kartou** nebo **okamžitým převodem** — běžný bankovní převod se může
+> připisovat i několik hodin.
+
+(EN: "Your reservation is only firmly confirmed once the payment is received. Until then it may
+still be cancelled — e.g. if the payment deadline lapses or the dates fill up. For instant
+confirmation we recommend paying by **card** or **instant transfer**; a standard bank transfer can
+take several hours to arrive.") Place it in `resources/views/emails/booking-created-confirmation.blade.php`
+and on the public form (`resources/views/livewire/booking-form.blade.php`).
+
+### Reuses the existing status machinery (minimal new code)
+- `Booking::booted()/saving()` already sets `status = deposit_paid` when
+  `paid_amount >= deposit_amount` and disables the deadline — **unchanged**.
+- `BookingObserver::updated()` already emails `DepositFullReceived` on that transition —
+  **unchanged**. The webhook just sets `paid_amount = deposit_amount` and saves.
+- `booking->variable_symbol` → Comgate `refId`; `processed_transactions` → Comgate transId
+  dedupe/audit (no schema change).
+
+### Change surface
+- **Add:** `comgate-payments/sdk-php`; `config/services.php` `comgate` block
+  (`COMGATE_MERCHANT`/`COMGATE_SECRET`/`COMGATE_TEST`); `app/Services/ComgateClient.php`
+  (create payment + status, no secret logging); `bookings.comgate_transid` / `comgate_pay_url`
+  columns; payment creation in `BookingObserver::created()`; `POST /webhooks/comgate` controller.
+- **Change:** `BookingCreatedConfirmation` + its blade views (pay button instead of SPD QR).
+- **Remove:** `FioBankApiClient`, `ProcessFioBankPayments` + Fio test commands, the
+  `bookings:process-fio-payments` schedule, `services.fio_bank`, `FIO_BANK_API_TOKEN`, and
+  (optionally) `dfridrich/qr-platba`.
+- **Keep:** `bookings:process-pending` (reminders/auto-cancel — bank transfer can lag/never
+  arrive, so the deadline still matters).
+
+### Cost note
+This is the point where the current **0%** bank-transfer fee is traded for Comgate's
+**0.79–0.99%** (cards) in exchange for reliable, automated reconciliation — unavoidable once Fio
+(free polling) is gone, since ČSOB won't auto-reconcile.
+
+### Verification (Comgate sandbox)
+`COMGATE_TEST=true` + dev stack/Mailpit → book → pay (card + QR) → callback verified via `/status`
+→ booking `deposit_paid` + `DepositFullReceived` email → replay callback is idempotent → unpaid
+booking still auto-cancels via `bookings:process-pending` → no secrets in `bookings.log`.
+
+_Comgate mechanics per apidoc.comgate.cz (payment process, REST API, payment methods) and
+help.comgate.cz (bank transfers / variable symbol), verified August 2026._
