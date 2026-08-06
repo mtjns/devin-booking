@@ -182,3 +182,63 @@ backups together.
   `vendor/` and migrations reflect the new build (no stale volume).
 - **#5:** `curl -I https://<domain>` shows the new security headers.
 - **#11/#12:** `php artisan test` green in CI against a MySQL service; `pint --test` clean.
+
+---
+
+## Appendix — Build vs. Buy, Hosting & Pricing (optimized for lowest cost)
+
+This app is really two things: (1) a **custom shared-bed availability + pricing engine**
+(per-night capacity, guest categories, whole-cabin blocking, deposits, Czech *variable
+symbol*) — the genuine product, hard to buy off-the-shelf; and (2) a large pile of
+**self-hosted plumbing + a poll-based bank reconciler** — which is where almost all the risk
+lives and which is cheap to replace with managed pieces. Recommendation: **keep the brain,
+rent the plumbing.** A full booking SaaS (Lodgify/Smoobu/Beds24) is rejected because those
+model a property as one atomic unit and won't support the shared-bed-by-category model or the
+Czech bank-transfer flow without giving one of them up.
+
+### Payments — cheapest is to keep bank transfer
+Bank transfer via Fio has **0% transaction fees**; every card gateway takes a cut, so a paid
+gateway is a reliability/UX upgrade, not a cost saving.
+
+| Option | Per-transaction | Monthly | Notes |
+|---|---|---|---|
+| **Keep Fio bank transfer** (current) | **0%** | **0 Kč** | Cheapest. Fix token-in-logs (#1) + harden matching instead of switching. |
+| Comgate | 0.79–0.99% (cards) | 0–149 Kč | Cheapest CZ card gateway; free setup/payouts; prices frozen to 31 Dec 2026. |
+| GoPay | low %, tiered | 0 Kč if turnover >50k/mo, else 80 Kč | Comparable. |
+
+Variable-symbol matching is inherent to *any* bank-transfer method. A gateway only removes it
+if you move to **card** payments (signed, pushed webhooks instead of 10-min polling) — worth it
+only if you want cards or the polling keeps causing incidents.
+
+### Hosting — cheapest reliable options
+
+| Option | Cost/mo | What you get | Ops burden |
+|---|---|---|---|
+| **Hetzner CX22 + existing (hardened) Compose** | **~€3.79 (~$4)** | Cheapest solid EU VPS, 20 TB traffic | You patch/deploy (compose already exists) |
+| **Hetzner + Ploi** | ~$12 total | Managed deploys, migrate-on-deploy, SSL, backups, monitoring | Low |
+| Hetzner + Laravel Forge | ~$16 total | Same idea, 1 server on Hobby | Low |
+| Laravel Cloud | $5 credit + usage (~$15–30+ realistic) | Zero-ops, but always-on web+queue+scheduler means scale-to-zero doesn't help | None |
+| Full booking SaaS | ~$30–50+ | No servers | None, but **doesn't fit the model** |
+
+### Near-free supporting services
+- **Email:** Resend free tier (3,000/mo) = **$0**, or Amazon SES (~$0.10 / 1,000). Replaces raw
+  SMTP with real deliverability + bounce handling. (Fixes #4 in the email/SMTP sense.)
+- **Backups:** keep MySQL on the VPS; ship nightly dumps **offsite** to Backblaze B2 or a
+  Hetzner Storage Box (~€0–3/mo). Cheaply fixes #15.
+- **Search:** **drop Meilisearch** — a whole service + key + RAM used only for admin filtering
+  of a small table. Free savings; removes a service and attack surface.
+- **Managed DB (PlanetScale/DO/RDS ~$15+/mo):** skip for cost reasons; offsite dumps cover the
+  real risk at this scale.
+
+### Cheapest recommended architecture (keeps the custom model)
+- **Host:** Hetzner CX22 (~$4), optionally + Ploi (+$8) to drop the babysitting
+- **Payments:** keep Fio bank transfer ($0) — fix token logging (#1) + harden matching
+- **Email:** Resend free tier ($0)
+- **Backups:** dumps → Backblaze B2 (~$0)
+- **Drop:** Meilisearch
+- **Total: ~$4/mo DIY, or ~$12/mo hands-off** — vs. $30–50+ for a SaaS that wouldn't fit.
+
+_Pricing verified August 2026; Czech gateway rates frozen to end-2026 per Comgate. Sources:
+Comgate online-payments pricing, GoPay ceník, Laravel Cloud pricing, Hetzner Cloud pricing,
+Ploi/Forge pricing pages, Resend/SES/Postmark pricing. Figures drift — re-check before
+committing spend._
