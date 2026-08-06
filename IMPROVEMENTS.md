@@ -242,3 +242,67 @@ _Pricing verified August 2026; Czech gateway rates frozen to end-2026 per Comgat
 Comgate online-payments pricing, GoPay ceník, Laravel Cloud pricing, Hetzner Cloud pricing,
 Ploi/Forge pricing pages, Resend/SES/Postmark pricing. Figures drift — re-check before
 committing spend._
+
+---
+
+## Appendix — Payment migration: Fio Bank → Comgate (bank switching to ČSOB)
+
+### Why
+The bank is moving to **ČSOB**, which has no Fio-style token API, so the current
+`bookings:process-fio-payments` polling reconciliation will stop working. Replace it with the
+**Comgate** gateway. Chosen setup: **deposit-only** payment per booking; checkout offers **all
+methods** (card, QR/bank transfer, Apple/Google Pay).
+
+### How Comgate verifies a QR / bank-transfer payment
+The QR the customer scans contains **Comgate's own collection account** and a **unique variable
+symbol Comgate assigns** (the customer can't change amount, VS, or recipient). So the money lands
+in Comgate's account and **Comgate** matches the incoming transfer by that VS — you never read a
+bank. Flow:
+1. On booking creation, the app calls Comgate to **create a payment** for the deposit, passing the
+   booking's `variable_symbol` as `refId`; Comgate returns a `transId` + payment URL.
+2. Customer pays (card = instant; QR/bank transfer = pending until funds arrive, seconds to hours
+   unless instant payment).
+3. Comgate matches the transfer on its side, flips `PENDING → PAID`, and **pushes a callback**
+   (`id`/transId, `refId`, `status`) to the app — retried up to ~1,000× until it gets a 2xx.
+4. The app **verifies via Comgate's `/status` endpoint** with the `transId` (never trusting raw
+   callback params), then marks the booking paid.
+5. Comgate **settles payouts to the ČSOB account** in daily/monthly batches. ČSOB only *receives*
+   money; nothing reconciles against it — which is exactly why the missing ČSOB API stops mattering.
+
+### Fit with the existing "QR in email" model
+The confirmation email swaps the SPD QR-platba image for a **"Zaplatit zálohu" button** to the
+Comgate payment URL (optionally plus a QR *of that URL* for mobile). Bank-transfer-by-scan still
+exists — as a method **on Comgate's page** — but now Comgate confirms it automatically.
+
+### Reuses the existing status machinery (minimal new code)
+- `Booking::booted()/saving()` already sets `status = deposit_paid` when
+  `paid_amount >= deposit_amount` and disables the deadline — **unchanged**.
+- `BookingObserver::updated()` already emails `DepositFullReceived` on that transition —
+  **unchanged**. The webhook just sets `paid_amount = deposit_amount` and saves.
+- `booking->variable_symbol` → Comgate `refId`; `processed_transactions` → Comgate transId
+  dedupe/audit (no schema change).
+
+### Change surface
+- **Add:** `comgate-payments/sdk-php`; `config/services.php` `comgate` block
+  (`COMGATE_MERCHANT`/`COMGATE_SECRET`/`COMGATE_TEST`); `app/Services/ComgateClient.php`
+  (create payment + status, no secret logging); `bookings.comgate_transid` / `comgate_pay_url`
+  columns; payment creation in `BookingObserver::created()`; `POST /webhooks/comgate` controller.
+- **Change:** `BookingCreatedConfirmation` + its blade views (pay button instead of SPD QR).
+- **Remove:** `FioBankApiClient`, `ProcessFioBankPayments` + Fio test commands, the
+  `bookings:process-fio-payments` schedule, `services.fio_bank`, `FIO_BANK_API_TOKEN`, and
+  (optionally) `dfridrich/qr-platba`.
+- **Keep:** `bookings:process-pending` (reminders/auto-cancel — bank transfer can lag/never
+  arrive, so the deadline still matters).
+
+### Cost note
+This is the point where the current **0%** bank-transfer fee is traded for Comgate's
+**0.79–0.99%** (cards) in exchange for reliable, automated reconciliation — unavoidable once Fio
+(free polling) is gone, since ČSOB won't auto-reconcile.
+
+### Verification (Comgate sandbox)
+`COMGATE_TEST=true` + dev stack/Mailpit → book → pay (card + QR) → callback verified via `/status`
+→ booking `deposit_paid` + `DepositFullReceived` email → replay callback is idempotent → unpaid
+booking still auto-cancels via `bookings:process-pending` → no secrets in `bookings.log`.
+
+_Comgate mechanics per apidoc.comgate.cz (payment process, REST API, payment methods) and
+help.comgate.cz (bank transfers / variable symbol), verified August 2026._
