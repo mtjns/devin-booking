@@ -274,6 +274,22 @@ The confirmation email swaps the SPD QR-platba image for a **"Zaplatit zálohu" 
 Comgate payment URL (optionally plus a QR *of that URL* for mobile). Bank-transfer-by-scan still
 exists — as a method **on Comgate's page** — but now Comgate confirms it automatically.
 
+### Customer-facing copy to add (payment/confirmation email + booking form)
+Because QR/standard bank transfers are **not instant**, the customer must be told the reservation
+is not final until the money actually arrives. Add a short notice near the pay button (and on the
+booking form), e.g. in Czech:
+
+> **Rezervace je závazně potvrzena až po připsání platby.** Do té doby může být rezervace
+> zrušena (např. při vypršení lhůty pro úhradu nebo obsazení termínu). Pro okamžité potvrzení
+> doporučujeme platbu **kartou** nebo **okamžitým převodem** — běžný bankovní převod se může
+> připisovat i několik hodin.
+
+(EN: "Your reservation is only firmly confirmed once the payment is received. Until then it may
+still be cancelled — e.g. if the payment deadline lapses or the dates fill up. For instant
+confirmation we recommend paying by **card** or **instant transfer**; a standard bank transfer can
+take several hours to arrive.") Place it in `resources/views/emails/booking-created-confirmation.blade.php`
+and on the public form (`resources/views/livewire/booking-form.blade.php`).
+
 ### Reuses the existing status machinery (minimal new code)
 - `Booking::booted()/saving()` already sets `status = deposit_paid` when
   `paid_amount >= deposit_amount` and disables the deadline — **unchanged**.
